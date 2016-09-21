@@ -3,7 +3,7 @@ Cartridge-Short-Name: RABBITMQ
 Cartridge-Version: '0.1'
 Compatible-Versions:
   - '0.1'
-Cartridge-Vendor: MangeshG
+Cartridge-Vendor: telstracdci
 Categories:
   - embedded
   - service
