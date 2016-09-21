@@ -1,0 +1,125 @@
+#!/bin/bash
+
+set -e
+source "$OPENSHIFT_CARTRIDGE_SDK_BASH"
+echo "Here"
+version=3.5.7
+envdir="$OPENSHIFT_RABBITMQ_DIR/env"
+destdir="$OPENSHIFT_RABBITMQ_DIR/versions/$version"
+export OPENSHIFT_RABBITMQ_PATH_ELEMENT=$destdir/rabbitmq/sbin 
+export OPENSHIFT_RABBITMQ_VERSION=$version
+export OPENSHIFT_DIY_IP=$OPENSHIFT_RABBITMQ_ERL_IP
+export ERLANG_HOME=$OPENSHIFT_DATA_DIR/erl_home
+export PATH=$PATH:$ERLANG_HOME:$ERLANG_HOME/bin 
+export ERL_EPMD_ADDRESS=$OPENSHIFT_RABBITMQ_ERL_IP
+export RABBITMQ_USE_LONGNAME=true
+bindir="$OPENSHIFT_RABBITMQ_DIR/versions/$OPENSHIFT_RABBITMQ_VERSION/rabbitmq/sbin"
+echo $bindir
+if [ ! -x "$bindir/rabbitmq-server" ]
+then
+    client_error "Can't find RabbitMQ installation for version $OPENSHIFT_RABBITMQ_VERSION"
+    exit 1
+fi    
+
+function status() {
+    if is_cartridge_running
+    then
+        client_result "Application is running"
+    else
+        client_result "Application is not running"
+    fi
+}  #  End of function  status.
+
+
+function start() {
+    echo "Starting RabbitMQ cartridge"
+    echo "Erlang Home $ERLANG_HOME" 
+    echo "Path $PATH" 
+
+    if is_cartridge_running
+    then
+        echo "RabbitMQ is already running"
+        return 0
+    fi
+
+    # Starting with -detached doesn't give us a pid file...
+    echo "Starting Rabbit MQ Server " 
+    echo "Erlang IP :: $ERL_EPMD_ADDRESS"
+    "$bindir/rabbitmq-server" <$ERLANG_HOME/dump>$ERLANG_HOME/dump 2>&1 &
+    echo "Started Rabbit MQ Server :: $bindir" 
+    if ! "$bindir/rabbitmqctl" wait "$RABBITMQ_PID_FILE"
+    then
+        client_error "Error waiting for RabbitMQ server to start"
+        return 1
+    fi
+
+    return 0
+}
+
+
+function stop() {
+    echo "Stopping RabbitMQ cartridge"
+
+    if ! is_cartridge_running
+    then
+        echo "RabbitMQ is already stopped"
+        return 0
+    fi
+
+    # Tell broker to stop and wait for it
+    "$bindir/rabbitmqctl" stop "$RABBITMQ_PID_FILE"
+
+    if is_cartridge_running
+    then
+        client_error "RabbitMQ server seems to be running still"
+        return 1
+    fi
+
+    return 0
+}
+
+
+function restart() {
+    if is_cartridge_running; then
+      stop
+    fi
+
+    start
+}
+
+
+function tidy() {
+    if is_cartridge_running
+    then
+        # Don't mess with the logs ourselves, let RabbitMQ do that
+        "$bindir/rabbitmqctl" rotate_logs
+    else
+        # Not running, delete ourselves
+        [ -d "$RABBITMQ_LOG_BASE" ] && rm -f "$RABBITMQ_LOG_BASE/*"
+    fi
+}
+
+
+function is_cartridge_running() {
+    [ -f "$RABBITMQ_PID_FILE" ]  ||  return 1
+    
+    nodepid=$(cat "$RABBITMQ_PID_FILE")
+    [ -n "$nodepid" ]  ||  return 1
+
+    kill -0 "$nodepid" 2>/dev/null || return 1
+
+    return 0
+}
+
+
+# Handle commands.
+case "$1" in
+    start)               start       ;;
+    restart|graceful)    restart     ;;
+    graceful-stop|stop)  stop        ;;
+    status)              status      ;;
+    tidy)                tidy        ;;
+    # TODO: snapshot/restore if applicable
+    *) exit 0;
+esac
+

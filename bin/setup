@@ -1,0 +1,137 @@
+#!/bin/bash
+
+set -e
+set -u
+
+source "$OPENSHIFT_CARTRIDGE_SDK_BASH"
+export PATH=$PATH:$ERLANG_HOME:$ERLANG_HOME/bin
+export ERL_EPMD_ADDRESS=$OPENSHIFT_RABBITMQ_ERL_IP
+export OPENSHIFT_DIY_IP=$OPENSHIFT_RABBITMQ_ERL_IP
+    
+
+# TODO: use version argument or manifest file
+version=3.5.7
+
+rabbitmq_tgz="rabbitmq-server-generic-unix-3.5.7.tar.gz"
+rabbitmq_dir="rabbitmq_server-3.5.7"
+rabbitmq_url="https://www.rabbitmq.com/releases/rabbitmq-server/v3.5.7/$rabbitmq_tgz"
+rabbitmq_md5="da225c44d3e0371a2cdb6497443352ea"
+
+envdir="$OPENSHIFT_RABBITMQ_DIR/env"
+
+destdir="$OPENSHIFT_RABBITMQ_DIR/versions/$version"
+readyfile="$destdir/.rabbitmq-ready"
+
+builddir="$destdir/build"
+#Install Erlang Here
+cd $OPENSHIFT_TMP_DIR
+wget https://github.com/charleslaw/otp/archive/openshift.zip -O openshift.zip
+unzip openshift.zip
+cd $OPENSHIFT_TMP_DIR/otp-openshift
+sed -i 's/{0,0,0,0}/'"{${OPENSHIFT_DIY_IP//[.]/,}}"'/g'  ./lib/erl_interface/src/connect/eirecv.c
+ERL_ROOT=$OPENSHIFT_DATA_DIR/erl_home
+./otp_build autoconf
+./configure --prefix=$ERL_ROOT --without-termcap
+make
+make install
+ERLANG_HOME=$ERL_ROOT
+export PATH=$PATH:$ERLANG_HOME:$ERLANG_HOME/bin
+mkdir -p $OPENSHIFT_RABBITMQ_DIR/{log,pid,data}
+
+
+if [ -z `type -t erl` ]
+then
+    client_error 'Erlang must be installed.'
+    exit 1
+fi    
+if [ -f "$readyfile" ]
+then
+    client_result "RabbitMQ cartridge $version already setup in $destdir"
+    exit 0
+fi
+
+
+rm -rf "$destdir"
+mkdir -p "$destdir"
+
+# Get sources into /tmp and save them there - this avoids downloading
+# them again and again during cartridge development.
+
+function get_source() {
+    tgz="$1"
+    url="$2"
+    md5="$3"
+
+    (
+        cd "$OPENSHIFT_TMP_DIR"
+        if [ -f "$tgz" ]
+        then
+            if echo "$md5  $tgz" | md5sum -c --quiet
+            then
+                client_message "Using previously OK downloaded $tgz"
+                return
+            else
+                client_message "Incorrect checksum on $tgz, refetching it"
+                rm "$tgz"
+            fi
+        fi
+
+        tmpfile=`mktemp --tmpdir="$OPENSHIFT_TMP_DIR"`
+        curl "$url" > "$tmpfile"
+        mv "$tmpfile" "$tgz"
+
+        if echo "$md5  $tgz" | md5sum -c --quiet
+        then
+            client_message "Fetched $tgz"
+            return
+        else
+            client_error "Incorrect checksum on fetched $tgz"
+            exit 1
+        fi
+    )
+echo "Getting out of Get Source"
+}
+
+get_source "$rabbitmq_tgz" "$rabbitmq_url" "$rabbitmq_md5"
+
+# RabbitMQ can simply be unpacked, nothing to build
+(
+    cd "$destdir"
+    tar xzf "$OPENSHIFT_TMP_DIR/$rabbitmq_tgz"
+    mv "$rabbitmq_dir" rabbitmq
+
+    # Teach rabbitmq to use fully qualified hostnames to support clustering
+    sed -i 's/-sname/-name/' rabbitmq/sbin/*
+
+    # But we have to do some Erlang configuration
+    cat >rabbitmq/etc/rabbitmq/rabbitmq-env.conf <<EOF
+# Env vars specific for running Erlang.  The rest of the config is
+# handled with cartridge env/* to allow easy user overrides.
+
+ERL_CRASH_DUMP=$ERLANG_HOME/dump
+export ERL_CRASH_DUMP
+EOF
+
+cat >>rabbitmq/etc/rabbitmq/rabbitmq-env.conf <<EOF
+
+    # Erlang sets ~/.erlang.cookie with no apparent way to change the
+    # file name.  So override HOME and hope that doesnt break
+    # anything...
+EOF
+    echo "HOME=$OPENSHIFT_RABBITMQ_DIR/data" >>rabbitmq/etc/rabbitmq/rabbitmq-env.conf
+    echo "export HOME" >>rabbitmq/etc/rabbitmq/rabbitmq-env.conf
+)
+
+# Enable the management plugin
+echo "Calling rabbitmq-plugins"
+echo "RABBITMQ_NODENAME = $RABBITMQ_NODENAME"
+echo "RABBITMQ_ENABLED_PLUGINS_FILE= $RABBITMQ_ENABLED_PLUGINS_FILE"
+
+"$destdir/rabbitmq/sbin/rabbitmq-plugins" enable rabbitmq_management
+
+echo "Finish Calling rabbitmq-plugins"
+# Set up environment that depends on the version
+set_env_var OPENSHIFT_RABBITMQ_PATH_ELEMENT "$destdir/rabbitmq/sbin" "$envdir"
+set_env_var OPENSHIFT_RABBITMQ_VERSION "$version" "$envdir"
+touch "$readyfile"
+echo "Getting Out Of Setup"

@@ -1,0 +1,71 @@
+Name: rabbitmq
+Cartridge-Short-Name: RABBITMQ
+Cartridge-Version: '0.1'
+Compatible-Versions:
+  - '0.1'
+Cartridge-Vendor: MangeshG
+Categories:
+  - embedded
+  - service
+  - erlang
+  - amqp
+  - messaging
+Source-Url: https://github.com/mangeshg/openshift-rabbitmq-cart.git
+Display-Name: RabbitMQ
+Description: 'RabbitMQ message broker.  Note: this cartridge does not yet support scaling.'
+Version: '3.5.7'
+Versions:
+  - '3.5.7'
+License: 'Mozilla Public License 1.1' 
+License-Url: https://www.rabbitmq.com/mpl.html
+Vendor: Pivotal
+Website: https://www.rabbitmq.com/
+Provides:
+  - rabbitmq
+  - amqp
+Scaling:
+  Min: 1
+  Max: 1
+Cart-Data:
+- Key: username
+  Type: cart_data
+  Description: Admin user on RabbitMQ broker
+- Key: password
+  Type: cart_data
+  Description: Password for admin user on RabbitMQ broker
+- Key: connection_url
+  Type: cart_data
+  Description: AMQP broker URL
+Endpoints:
+  - Private-IP-Name: IP 
+    Private-Port-Name: ERL_PORT
+    Private-Port: 20000
+    Public-Port-Name: ERL_PROXY_PORT
+    Public-Port: 25809
+  - Private-IP-Name: HOST 
+    Private-Port-Name: PORT
+    Private-Port: 8080
+    Public-Port-Name: BROKER_PROXY_PORT
+    Public-Port: 25808
+    Protocols:
+     - amqp
+  - Private-IP-Name: BROKER_HOST
+    Private-Port-Name: ADMIN_PORT
+    Private-Port: 15672
+    Public-Port-Name: ADMIN_PROXY_PORT
+    Protocols:
+     - http
+    Mappings:
+      - Frontend:      'rabbitgui'
+        Backend:       ''
+      - Frontend:      'api'
+        Backend:       'api'
+  - Private-IP-Name: BROKER_HOST
+    Private-Port-Name: ERLANG_BROKER_PORT
+    Private-Port: 14099
+    Public-Port-Name: ERLANG_BROKER_PROXY_PORT
+    Protocols:
+     - tcp
+Publishes:
+  publish-amqp-url:
+    Type: "ENV:NET_TCP:amqp"
