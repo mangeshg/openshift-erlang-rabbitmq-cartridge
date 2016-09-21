@@ -8,7 +8,6 @@ export ERL_EPMD_ADDRESS=$OPENSHIFT_RABBITMQ_ERL_IP
 export OPENSHIFT_DIY_IP=$OPENSHIFT_RABBITMQ_ERL_IP
     
 
-# TODO: use version argument or manifest file
 version=3.5.7
 
 rabbitmq_tgz="rabbitmq-server-generic-unix-3.5.7.tar.gz"
