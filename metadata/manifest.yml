@@ -6,6 +6,7 @@ Compatible-Versions:
 Cartridge-Vendor: telstracdci
 Categories:
   - embedded
+  - web_framework
   - service
   - erlang
   - amqp
