@@ -11,7 +11,7 @@ Categories:
   - erlang
   - amqp
   - messaging
-Source-Url: https://github.com/mangeshg/openshift-rabbitmq-cart.git
+Source-Url: https://github.com/mangeshg/openshift-erlang-rabbitmq-cartridge.git
 Display-Name: RabbitMQ
 Description: 'RabbitMQ message broker.  Note: this cartridge does not yet support scaling.'
 Version: '3.5.7'
