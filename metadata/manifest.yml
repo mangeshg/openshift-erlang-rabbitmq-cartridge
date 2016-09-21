@@ -38,7 +38,7 @@ Cart-Data:
   Type: cart_data
   Description: AMQP broker URL
 Endpoints:
-  - Private-IP-Name: IP 
+  - Private-IP-Name: ERL_IP 
     Private-Port-Name: ERL_PORT
     Private-Port: 20000
     Public-Port-Name: ERL_PROXY_PORT
